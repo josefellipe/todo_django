@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: todo_db
+      POSTGRES_USER: todo_user
+      POSTGRES_PASSWORD: todo_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  web:
+    build: .
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      gunicorn --bind 0.0.0.0:8000 todo.wsgi:application
+      "
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - rabbitmq
+
+  worker:
+    build: .
+    command: celery -A todo worker --loglevel=info
+    depends_on:
+      - db
+      - rabbitmq
+
+  beat:
+    build: .
+    command: celery -A todo beat --loglevel=info
+    depends_on:
+      - db
+      - rabbitmq
+      - worker
+
+volumes:
+  postgres_data:
